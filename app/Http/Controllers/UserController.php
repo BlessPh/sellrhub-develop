@@ -6,6 +6,7 @@ use App\Http\Requests\UpdateProfileRequest;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Redirect;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -41,15 +42,22 @@ class UserController extends Controller
 
 
 
-        if ($request->hasFile('image'))
-        {
-            $image = $request->file('image');
-            $randomName = Str::random(30) . '.' . $image->getClientOriginalExtension();
-            $path = Storage::disk('public')->put("user/images", $image);
-            $user->images()->create([
-                'url' => "storage/" . $path,
-            ]);
+        if ($request->hasFile('image')) {
+            try {
+                // Store the image in the 'user/images' directory in public storage
+                $path = $request->file('image')->store('user/images', 'public');
+
+                // Create a new image record in the user's image table
+                $user->images()->create([
+                    'url' => Storage::url($path),
+                ]);
+            } catch (\Exception $e) {
+                // Log the error for debugging purposes
+                Log::error("Error uploading user image: " . $e->getMessage());
+                // Optional: Return an error response if necessary
+            }
         }
+
 
         $user->load('images');
 

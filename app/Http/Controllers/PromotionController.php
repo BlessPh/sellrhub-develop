@@ -82,16 +82,24 @@ class PromotionController extends Controller
                 'promo_code' => $promoCode,
             ]);
 
-            if ($request->hasFile('images'))
-            {
-                foreach ($request->file('images') as $image) {
-                    $randomName = Str::random(30) . '.' . $image->getClientOriginalExtension();
-                    $path = Storage::disk('public')->put("promotions", $image);
-                    $promotion->images()->create([
-                        'url' => "storage/" . $path,
-                    ]);
+            if ($request->hasFile('images')) {
+                try {
+                    foreach ($request->file('images') as $image) {
+                        // Store the image in the 'promotions' directory in public storage
+                        $path = $image->store('promotions', 'public');
+
+                        // Create a new record for the promotion image in the database
+                        $promotion->images()->create([
+                            'url' => Storage::url($path),
+                        ]);
+                    }
+                } catch (\Exception $e) {
+                    // Log the error for debugging
+                    Log::error("Error uploading promotion images: " . $e->getMessage());
+                    // Optional: Add a user-friendly response or notification here
                 }
             }
+
 
             $promotionalPrices = [];
 

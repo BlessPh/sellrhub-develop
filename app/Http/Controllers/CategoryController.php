@@ -6,6 +6,7 @@ use App\Models\Category;
 use App\Http\Requests\StoreCategoryRequest;
 use App\Http\Requests\UpdateCategoryRequest;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
@@ -37,15 +38,21 @@ class CategoryController extends Controller
         $category = Category::create($validated);
         // dd($category);
 
-        if ($request->hasFile('image'))
-        {
-            $image = $request->file('image');
-            $randomName = Str::random(30) . '.' . $image->getClientOriginalExtension();
-            $path = Storage::disk('public')->put("category", $image);
-            $category->images()->create([
-                'url' => "storage/" . $path,
-            ]);
+        if ($request->hasFile('image')) {
+            try {
+                // Store the image in the 'category' directory in public storage
+                $path = $request->file('image')->store('category', 'public');
+
+                // Create a new record for the category image in the database
+                $category->images()->create([
+                    'url' => Storage::url($path),
+                ]);
+            } catch (\Exception $e) {
+                // Log the error for debugging
+                Log::error("Error uploading category image: " . $e->getMessage());
+            }
         }
+
 
         $category->load('images');
 
@@ -76,10 +83,30 @@ class CategoryController extends Controller
      */
     public function update(UpdateCategoryRequest $request, Category $category): ?Category
     {
-        Category::where('id', $category->id)->update($request->validated());
+        try {
+            // If the request contains an image, handle the image upload
+            if ($request->hasFile('image')) {
+                // Store the new image and get the path
+                $path = $request->file('image')->store('categories', 'public');
 
-        return $category->fresh();
+                // Update the category with the new image URL
+                $category->update([
+                    'image' => Storage::url($path),
+                ]);
+            }
+
+            // Update the rest of the category fields
+            $category->update($request->validated());
+
+            // Return the updated category
+            return $category->fresh();
+        } catch (\Exception $e) {
+            // Log any errors for debugging purposes
+            Log::error("Error updating category: " . $e->getMessage());
+            return null; // Optional: You can return a custom error response here
+        }
     }
+
 
     /**
      * Remove the specified resource from storage.

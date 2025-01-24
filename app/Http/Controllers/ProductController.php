@@ -6,6 +6,7 @@ use App\Models\Product;
 use App\Http\Requests\StoreProductRequest;
 use App\Http\Requests\UpdateProductRequest;
 use App\Models\Shop;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
@@ -51,25 +52,41 @@ class ProductController extends Controller
             }
 
             // Images save
-            if ($request->has('product_images'))
-            {
-                foreach ($request->file('product_images') as $image) {
-                    $randomName = Str::random(30) . '.' . $image->getClientOriginalExtension();
-                    $path = Storage::disk('public')->put("products", $image);
-                    $product->images()->create([
-                        'url' => "storage/" . $path,
-                    ]);
+            if ($request->hasFile('product_images')) {
+                try {
+                    foreach ($request->file('product_images') as $image) {
+                        // Save the image to the 'products' directory in public storage
+                        $path = $image->store('products', 'public');
+
+                        // Create a new record for the product image in the database
+                        $product->images()->create([
+                            'url' => Storage::url($path),
+                        ]);
+                    }
+                } catch (\Exception $e) {
+                    // Log the error for debugging purposes
+                    Log::error("Error uploading product images: " . $e->getMessage());
                 }
             }
 
+
             // Video save
-            if ($request->hasFile('product_video'))
-            {
-                $video = $request->file('product_video');
-                $randomName = Str::random(30) . '.' . $video->getClientOriginalExtension();
-                $path = Storage::disk('public')->put("products/videos", $video);
-                $product->update(['video_url' => "storage/" . $path]);
+            if ($request->hasFile('product_video')) {
+                try {
+                    // Store the product video in the 'products/videos' directory
+                    $path = $request->file('product_video')->store('products/videos', 'public');
+
+                    // Update the product with the generated video URL
+                    $product->update([
+                        'video_url' => Storage::url($path),
+                    ]);
+                } catch (\Exception $e) {
+                    // Log the error for debugging
+                    Log::error("Error uploading the product video: " . $e->getMessage());
+                }
             }
+
+
 
             $product->load('images', 'colors');
 
@@ -146,17 +163,25 @@ class ProductController extends Controller
                 }
             }
 
-            if ($request->has('product_images'))
-            {
-                $product->images()->delete();
+            if ($request->has('product_images')) {
+                try {
+                    // Delete all existing images for the product
+                    $product->images()->delete();
 
-                foreach ($request->product_images as $image)
-                {
-                    $product->images()->create([
-                        'url' => $image
-                    ])->fresh();
+                    // Loop through the provided images and create new records
+                    foreach ($request->product_images as $image) {
+                        // Create a new image record for the product
+                        $product->images()->create([
+                            'url' => $image,
+                        ]);
+                    }
+                } catch (\Exception $e) {
+                    // Log the error for debugging purposes
+                    Log::error("Error uploading product images: " . $e->getMessage());
+                    // Optional: You can add a user-friendly response or notification here
                 }
             }
+
 
             return response()->json([
                 'message' => 'Product updated successfully',

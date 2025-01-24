@@ -7,6 +7,7 @@ use App\Http\Requests\Shop\ShopRequest;
 use App\Models\Product;
 use App\Models\Shop;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
@@ -39,24 +40,33 @@ class ShopController extends Controller
             $user->assignRole('seller');
         }
 
-        if ($request->hasFile('logo'))
-        {
-            $logo = $request->file('logo');
-            $randomName = Str::random(30) . '.' . $logo->getClientOriginalExtension();
-            $path = Storage::disk('public')->put("shops/logos", $logo);
-            $shop->update(['logo' => "storage/" . $path]);
-        }
+        if ($request->hasFile('logo')) {
+            try {
+                $path = $request->file('logo')->store('shops/logos', 'public');
 
-        if ($request->hasFile('image_url'))
-        {
-            foreach ($request->file('image_url') as $image) {
-                $randomName = Str::random(30) . '.' . $image->getClientOriginalExtension();
-                $path = Storage::disk('public')->put("shops/images", $image);
-                $shop->images()->create([
-                    'url' => "storage/" . $path,
+                $shop->update([
+                    'logo' => Storage::url($path),
                 ]);
+            } catch (\Exception $e) {
+                Log::error("Error occurred while uploading logo image : " . $e->getMessage());
             }
         }
+
+
+        if ($request->hasFile('image_url')) {
+            foreach ($request->file('image_url') as $image) {
+                try {
+                    $path = $image->store('shops/images', 'public');
+                    $shop->images()->create([
+                        'url' => Storage::url($path),
+                    ]);
+                } catch (\Exception $e) {
+                    Log::error("Error occurred while uploading shop images : " . $e->getMessage());
+                }
+            }
+        }
+
+
 
         $shop->load('deliveryTypes', 'paymentMethods', 'images');
 
